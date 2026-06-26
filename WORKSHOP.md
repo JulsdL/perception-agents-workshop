@@ -1,35 +1,43 @@
-# AI-Powered UI Verification Challenge
+# Using Perception Agents to verify site design
 
 ## The Scenario
 
-You're a frontend developer about to ship a podcast landing page. Yesterday you demoed it to a few peers and they had feedback: the hero title feels too big, the accent color doesn't pop the way it should, some buttons are oversized, and a few small things are just slightly off. You agreed with most of it. Today you're coming in fresh, ready to incorporate those changes.
+You're a frontend developer preparing to ship a landing page for a podcast. Yesterday you demoed the page to a few peers and they provided some feedback: the hero title feels too big, the accent color doesn't pop the way it should, some buttons are oversized, and a few small things are just slightly off. You are onboard with the feedback, and today you're coming in fresh, and are ready to incorporate those changes.
 
-You have a few tools:
+You have a few tools at your disposal:
 
 | Tool   | Description                   |
 | -----| ------------------------| 
 | [Nova Act Chrome Extension](https://github.com/amazon-agi-labs/nova-act-browser-extensions) | Annotate live UI elements in Chrome |
 | [UI Verification skills](https://github.com/amazon-agi-labs/nova-act-agent-skills) | Automated CSS rule checking |
-| [Nova Act SDK](https://github.com/aws/nova-act/tree/main/src/nova_act) | Browser automation for verification flows |
+| [Nova Act SDK](https://github.com/aws/nova-act/tree/main/src/nova_act) | Browser automation to run verification flows |
+| [Nova Act MCP Server](https://github.com/amazon-agi-labs/amazon-nova-act-mcp) | Give your agent easy access to Nova Act's capabilities |
 
-And you have an AI coding agent CLI: [**Kiro CLI**](https://kiro.dev/) or **Claude Code**. **Make sure you have them running before you start this workshop!!**
+And you have an AI coding agent: [**Kiro CLI**](https://kiro.dev/) or **Claude Code**. **Make sure you have them running before you start this workshop!!**
 
 ---
 
+## The Perception Agent Primitives
+
+You will start the workshop by learning about the two perception agent primitives, Annotation and Verification. The Annotation primitive lets you annotate a webpage by selecting elements or drawing on it, and adding your own comments. This produces a set of artifacts including a json representation of your annotations, as well as a prompt you can provide your agent to make those edits.
+
+The Verification primitive verifies that the live website adheres to the design specifications that are in your code repository. It also creates user workflows to verify common workflows that are carried out on the site.
+
 ## The Challenge
 
-Wire these tools together into an automated pipeline that finds discrepancies, fixes them via AI, and verifies the UI changes, all triggered from the browser with a single action.
+Currently these primitives are independent of each other. The challenge we will solve in this workshop is wiring these tools together into an automated pipeline that finds discrepancies, fixes them, and verifies the UI changes, all triggered from the browser with a single action. Rather than manually taking the output of the Annotation primitive and feeding that to your coding agent, we will add an 'Apply Changes' button that will trigger the entire pipeline.
 
+## By the end of the workshop...
 
-### End Goal
-
-Build an automated pipeline that:
-1. Adds an "Apply Changes" button to the extension that sends your annotations somewhere
-2. A backend receives those annotations and invokes an AI coding agent to fix the CSS
-3. After the agent finishes, verification runs automatically
+You will have built an automated pipeline that:
+1. Add an "Apply Changes" button to the extension that sends your annotations to a local endpoint
+2. An endpoint running locally receives these annotations and invokes your AI coding agent to fix any CSS issues
+3. After the coding agent finishes, verification is automatically triggered
 4. The verification report shows **0 failures** (Bonus Challenge)
 
 The pipeline should be repeatable: annotate, apply, verify, iterate until clean.
+
+Before we start building that, let's make sure we've got all of our prerequisites installed.
 
 ---
 
@@ -68,7 +76,7 @@ Get your local environment ready: app running, extension loaded, dependencies in
 
 ```bash
 git clone https://github.com/amazon-agi-labs/perception-agents-workshop.git
-cd aiewf-perception-agents-workshop
+cd perception-agents-workshop
 ```
 
 ### 2. Install requirements
@@ -123,13 +131,27 @@ The installer will walk you through several prompts. Here's what to select at ea
 
 **5. "Proceed with installation?"**: type `Y`
 
-The skills install to:
-- Kiro CLI: `~/.agent/skills/nova-act/` and `~/.agent/skills/ui-verification/`
-- Claude Code: `~/.claude/skills/nova-act/` and `~/.claude/skills/ui-verification/`
+The skills should be installed in:
+- Kiro CLI: `./.kiro/skills/nova-act/` and `./.kiro/skills/ui-verification/`
+- Claude Code: `./.claude/skills/nova-act/` and `./.claude/skills/ui-verification/`
+
+Note: there is a [known issue](https://github.com/vercel-labs/skills/issues/744) with creating the symlinks. Until that is resolved, you will need to manually copy the skills into your coding agent using this command:
+
+```bash
+# For Kiro
+mkdir -p .kiro/skills
+ln -s ../../.agents/skills/nova-act .kiro/skills/nova-act
+ln -s ../../.agents/skills/ui-verification .kiro/skills/ui-verification
+
+# For Claude
+mkdir -p .claude/skills
+ln -s ../../.agents/skills/nova-act .claude/skills/nova-act
+ln -s ../../.agents/skills/ui-verification .claude/skills/ui-verification
+```
 
 #### 4. Verify the installation
 
-**Restart your Kiro CLI or Claude Code CLI session** if you have earlier sessions running; for the MCP server and skills to be picked up.
+**Restart any open Kiro CLI or Claude Code CLI sessions** for the Nova Act MCP server and perception skills to be picked up.
 
 After restarting, try the following prompt in a new session:
 
@@ -142,40 +164,28 @@ You should see output like:
   Yes, I have both skills available. Here are their locations:
   
   - nova-act:
-   <parent-directory>/aiewf-perception-agents-workshop/.kiro/skills/nov
+   <parent-directory>/perception-agents-workshop/.kiro/skills/nov
   a-act/SKILL.md 
   - ui-verification:
-  <parent-directory>/aiewf-perception-agents-workshop/.kiro/skills/ui-
+  <parent-directory>/perception-agents-workshop/.kiro/skills/ui-
   verification/SKILL.md 
   
 ```
 
-If the location of the skills show up in the global location instead of the project directories, create a symlink:
+#### 5. Configure the Nova Act MCP server
 
-```bash
-# For Kiro
- mkdir -p .kiro/skills
-  ln -s ../../.agents/skills/nova-act .kiro/skills/nova-act
-  ln -s ../../.agents/skills/ui-verification .kiro/skills/ui-verification
+By default, the Nova Act MCP server doesn't enable the UI verification tool set, so we need to enable those ourselves. To do this, you need to add `--toolsets ui-verification` to the MCP server args.
 
-# For Claude
-# 1. Create the project-level skills directory
-  mkdir -p .claude/skills
+We also need to add the **Nova Act API key** which you set in the `NOVA_ACT_API_KEY` environment variable.
 
-# 2. Copy both skills from user-level to project-level
-  cp -r ~/.claude/skills/nova-act .claude/skills/
-  cp -r ~/.claude/skills/ui-verification .claude/skills/
-```
+To make these edits:
+1. Open either `~/.kiro/settings/mcp.json` (for Kiro CLI) or `~/.claude.json` (for Claude Code)
+2. Find the json object for `nova-act-mcp`
+3. In the args array, add ```"--toolsets", "ui-verification"```
+4. For `NOVA_ACT_API_KEY`, enter your Nova Act API key
+5. Save the file and exit
 
-After creating the symlink verify the location of the skills again.
-
-Double check the skills installation by typing `/ui-verification` in a Kiro CLI or Claude CLI. It should appear in the autocomplete list.
-
-#### 5. Enable the UI Verification toolset on the MCP server
-
-The Nova Act MCP server needs the `--toolsets ui-verification` flag to expose the `verify_*` and `evaluate_js` tools. Without it, only the basic browser tools are available. Here is where you would add your **Nova Act API Key** provided at the event.
-
-**Kiro**: edit `~/.kiro/settings/mcp.json` and do the same:
+Your config should look like this:
 
 ```json
 "nova-act-mcp": {
@@ -186,41 +196,25 @@ The Nova Act MCP server needs the `--toolsets ui-verification` flag to expose th
     "ui-verification"
   ],
   "env": {
-    "NOVA_ACT_API_KEY": "<your-api-key-provided-at-the-event>"
+    "NOVA_ACT_API_KEY": "<your-api-key>"
   }
 }
 ```
 
-**Claude Code**: edit `~/.claude.json`, find the `nova-act-mcp` entry under `mcpServers`, and add `"--toolsets", "ui-verification"` to the `args` array:
+After editing, **restart any active Kiro CLI or Claude Code sessions** for the changes to take effect.
 
-```json
-"nova-act-mcp": {
-  "command": "uvx",
-  "args": [
-    "amazon-nova-act-mcp",
-    "--toolsets",
-    "ui-verification"
-  ],
-  "env": {
-    "NOVA_ACT_API_KEY": "<your-api-key-provided-at-the-event>"
-  }
-}
-```
-
-After editing, **restart your CLI session** for the change to take effect.
-
-Congratulations! You are all set to start trying out the perception primitives. 
+Congratulations! You have completed setting up your environment and are ready to start the workshop!
 
 > **Stuck?** If something isn't working as expected, check the [Troubleshooting](#troubleshooting) section at the bottom of this page.
 
 ---
-## Try out the primitives yourself (12-15 mins)
+## Try the Perception Agent primitives (12-15 mins)
 Let's start by exploring the primitives that are available to you in this workshop.
 ### 1. Start the app server
 Get the podcast app (the workshop sample app) running locally so you have a live page to annotate and verify against.
 
 ```Bash
-cd thinking-cap-podcast-app
+cd some-podcast-app
 npm install && npm run dev
 ```
 
@@ -235,9 +229,9 @@ You can invoke the skill in three ways:
 
 | Command | What runs |
 |---------|-----------|
-| `Verify https://my-site.com matches the design spec` | Visual checks only |
-| `Run flows on https://my-site.com` | Flow checks only |
-| `Verify https://my-site.com` | Both (visual first, then flows, into one combined report) |
+| `Verify http://localhost:5173/ matches the design spec` | Visual checks only |
+| `Run flows on http://localhost:5174/` | Flow checks only |
+| `Verify http://localhost:5174/` | Both (visual first, then flows, into one combined report) |
 
 **Visual verification** reads spec files from `.ui-verification/specs/`, translates each claim into a deterministic `getComputedStyle()` check against the live DOM, and reports pass/fail per rule.
 
@@ -262,14 +256,14 @@ reports/<run-timestamp>/
 To save time during the workshop, the repo already includes pre-generated verification artifacts. You do **not** need to run this step; it's here so you understand what the files are and how they were created.
 
 The pre-generated files:
-- `thinking-cap-podcast-app/visual/design.md`: the design spec (source of truth)
-- `thinking-cap-podcast-app/.ui-verification/specs/`: CSS rules (visual-style, components, accessibility, project-rules, platform-conventions)
-- `thinking-cap-podcast-app/.ui-verification/flows/`: Gherkin scenarios for functional testing
+- `some-podcast-app/visual/design.md`: the design spec (source of truth)
+- `some-podcast-app/.ui-verification/specs/`: CSS rules (visual-style, components, accessibility, project-rules, platform-conventions)
+- `some-podcast-app/.ui-verification/flows/`: Gherkin scenarios for functional testing
 
-If you want to regenerate from scratch, first delete the `.ui-verification` and `visual` folders and run the following command (this is totally optional for this workshop.):
+If you want to regenerate from scratch, first delete the `.ui-verification` and `visual` folders and run the following command (this is optional for this workshop.):
 ```bash
 # In your Kiro CLI or Claude Code session, invoke the skill:
-/ui-verification http://localhost:5173 in thinking-cap-podcast-app directory
+/ui-verification http://localhost:5173 in some-podcast-app directory
 ```
 
 That's the **verification** primitive: it tells you *what's wrong*, automatically. Next, let's move on to the UI Annotator, a Chrome extension that lets you visually mark up elements and describe desired changes directly on the page.
@@ -284,51 +278,49 @@ The annotator extension is how you'll point at elements and describe what needs 
 4. Select: `aiewf-perception-agents-workshop/tools/extension`
 
 #### Try it out: annotate the app
-Before wiring everything into one button, get hands-on with each primitive individually so you understand what they do and why combining them feels like the obvious next step.
+Before you wire both primitives together, let's get hands-on with the Annotator primitive. You'll use it to annotate the homepage of the podcast landing page. In the steps below, you will use the annotator to point at elements and describe what you want changed. 
 
 1. Open http://localhost:5173 in Chrome
 2. Click the extension icon → **"Annotate Current Page"**
-
 3. Switch to **Element** mode
 4. Click the hero heading ("The Thinking Cap Podcast")
 5. Type: `Change this font to a serif font`
 6. Click **Save**
 7. Add a few more annotations (e.g. click a play button → `Make this smaller`)
-8. **Click Save & export** → download the annotations JSON or copy the prompt
+8. **Click Save & export**
+9. Download the annotations JSON and copy the prompt
 
-> #### Sample Changes to Make
+> #### Some other ideas of changes you could make
 >
-> Here are the kinds of changes you'll be annotating and applying:
->1. Change the font of "The Thinking Cap Podcast" heading to a serif font
->2. The published date should be "July 3, 2026"
->3. Make the play buttons green 
+> * Change the font of "The Thinking Cap Podcast" heading to a serif font
+> * The published date should be "July 3, 2026"
+> * Make the play buttons green 
 
-Use the annotator to point at each element and describe what you want changed. The AI agent handles the rest.
+After you save, the extension generates a prompt that you can pass to your coding agent to make the changes you requested. Let's do that:
 
-The extension generates a prompt that you can pass directly to your coding agent in a terminal window. Try it:
 ```bash
 # Copy the prompt from the extension's "Copy Prompt" button, then:
 # With Kiro:
 kiro-cli chat -a --no-interactive --effort max "$(cat <<'EOF'
-   Use this annotation to update the src code for thinking-cap-podcast-app: <paste prompt here>
+   Use this annotation to update the src code for some-podcast-app: <paste prompt here>
 EOF)"
 
 # With Claude:
-claude --dangerously-skip-permissions -p 'Use this annotation to update the src code for thinking-cap-podcast-app: <paste prompt here>'
+claude --dangerously-skip-permissions -p 'Use this annotation to update the src code for some-podcast-app: <paste prompt here>'
 
 ```
 
-Go back to the [localhost:5173](http://localhost:5173) in the browser and you should see all the changes being applied. The next step would be to run the /ui-verification skill again to see if anything fails. 
+Once you've done that, go back to the landing page [localhost:5173](http://localhost:5173) in the browser and you should see all the changes have been applied. If you wanted to verify the updates you made still align with your design, the next step would be to run the /ui-verification skill to see if anything fails.
 ```
-cd thinking-cap-podcast-app # if not already in this directory
+cd some-podcast-app # if not already in this directory
 /ui-verification http://localhost:5173 
 ```
 
 ### 4. Explore what's available
-Before you dive into the wiring up the 2 primitives, take a look at the project layout so you know where source files, specs, and tools live.
+Before you dive into the wiring up the two primitives, take a look at the project layout so you know where source files, specs, and tools live.
 
 ```
-thinking-cap-podcast-app/
+some-podcast-app/
 ├── src/App.css              <- Component styles (annotation fixes go here)
 ├── src/index.css            <- CSS variables
 ├── visual/design.md         <- Design spec (source of truth)
@@ -345,18 +337,18 @@ tools/
 ```
 
 ---
-## Choose Your Path (15 - 20 mins)
+## Choose Your Path (15 - 30 mins)
 
-The two primitives are great on their own, as you've just seen. But put yourself in the shoes of a frontend engineer iterating on a design. You annotate a few elements, copy the prompt, paste it into your agent, wait for the fix, then run verification. That's one cycle. Now imagine doing that ten times as feedback trickles in from design review. Ten copy-pastes, ten agent invocations, ten verification runs: forty manual steps keeping you chained to your terminal.
+The two primitives are valuable on their own. But put yourself in the shoes of a frontend engineer iterating on a design. You annotate a few elements, copy the prompt, paste it into your agent, wait for the fix, then run verification. That's one cycle. Now imagine doing that ten times as feedback trickles in from design review. Ten copy-pastes, ten agent invocations, ten verification runs: forty manual steps keeping you chained to your terminal.
 
-In this workshop we'll level up these two primitives by wiring them together into a single "Apply Changes" button. Click it, walk away for coffee, and come back to a verification report (green or red), no hand-holding required.
+In this next step you will level up these two primitives by wiring them together behind a single "Apply Changes" button. Click it, walk away for coffee, and come back to a verification report (green or red), no hand-holding required.
 
 Pick a difficulty level based on how much guidance you want. Both paths reach the same end goal.
 
 | Level                            | What you get                                             | Time   |
 | ----------------------------------| ----------------------------------------------------------| --------|
 | [**EASY**](WORKSHOP-EASY.md)     | Full step-by-step walkthrough with all code provided.    | 15 min |
-| [**MEDIUM**](WORKSHOP-MEDIUM.md) | Two code-level hints showing what to build.              | 20 min |
+| [**MEDIUM**](WORKSHOP-MEDIUM.md) | Two code-level hints showing what to build.              | 30 min |
 
 
 ---
@@ -367,9 +359,7 @@ Finished the main challenge? Pick one of these three options, or do all three if
 
 ### Option 1: Let Bee do the pointing
 
-What if you didn't need to click and type to annotate at all? [Bee](https://bee.computer/) is an AI wearable that listens to your conversations and understands context. Instead of clicking elements in a Chrome extension, you just _talk_ about what needs to change, and Bee captures it as structured design feedback that flows directly into the coding agent pipeline.
-
-The human becomes the reviewer, not the pointer. Bee listens, the coding agent fixes, verification confirms. Full perception agent loop by simply taking to the Bee device.
+What if you didn't need to click and type to annotate at all? [Bee](https://bee.computer/) is an AI wearable that listens to your conversations and understands context. Instead of clicking elements in a Chrome extension, you just _talk_ about what needs to change, and Bee captures it as structured design feedback that flows directly into the coding agent pipeline. Bee listens, the coding agent fixes, verification confirms. Full perception agent loop by simply taking to the Bee device.
 
 #### Architecture
 
@@ -422,7 +412,7 @@ The human becomes the reviewer, not the pointer. Bee listens, the coding agent f
 
 #### Prerequisites
 
-1. **Install Bee CLI** from https://github.com/bee-computer/bee-cli
+1. **Install Bee CLI** from [https://github.com/bee-computer/bee-cli](https://github.com/bee-computer/bee-cli)
 2. **Authenticate**: run `bee login` and follow the prompts
 3. **Verify**: run `bee status` (should show your account connected)
 4. Ensure `claude` or `kiro-cli` is on your PATH (same as main challenge)
@@ -443,7 +433,7 @@ The Bee annotator is a reverse proxy that:
 **1. Start the app** (if not already running):
 
 ```bash
-cd thinking-cap-podcast-app
+cd some-podcast-app
 npm run dev
 ```
 
@@ -453,12 +443,12 @@ npm run dev
 node tools/bee-annotator-solution/proxy-worker.js \
   --target http://localhost:5173 \
   --port 9997 \
-  --feedback thinking-cap-podcast-app/.tmp/bee-conv-feedback.json \
+  --feedback some-podcast-app/.tmp/bee-conv-feedback.json \
   --inspector-script tools/bee-annotator-solution/inspector.js \
-  --app-dir thinking-cap-podcast-app
+  --app-dir some-podcast-app
 ```
 
-**3. Open the proxied app** at http://localhost:9997. You'll see the app with a dark sidebar on the right saying "Waiting for design conversations..."
+**3. Open the proxied app** at [http://localhost:9997](http://localhost:9997). You'll see the app with a dark sidebar on the right saying "Waiting for design conversations..."
 
 **4. Have a design conversation** near your Bee device. For example, say out loud:
 
@@ -472,7 +462,7 @@ node tools/bee-annotator-solution/proxy-worker.js \
 
 ```bash
 # In your IDE
-/ui-verification http://localhost:5173 in thinking-cap-podcast-app directory
+/ui-verification http://localhost:5173 in some-podcast-app directory
 ```
 
 #### Tips
@@ -489,7 +479,7 @@ The full working code is in `tools/bee-annotator-solution/`. If you get stuck, p
 
 ---
 
-### Option 2: Build something you'd actually use
+### Option 2: Build something for your own use case
 
 You now have two primitive tools that compose into anything:
 
@@ -504,26 +494,25 @@ Some ideas to spark thinking:
 - A **design review bot** that runs verification on every PR deploy and comments with failures
 - A **regression guard** that screenshots before/after and flags visual drift
 - A **design system enforcer** that checks every page against your component library rules on CI
-- Something nobody's thought of yet (that's the one we want to see)
 
 ### Option 3: Auto-fix loop
 
 Close the loop without human intervention. Feed the verification report directly back to the agent and let it self-correct.
 
-1. **Feed the report to the agent.** Open the latest verification report at `thinking-cap-podcast-app/.ui-verification/reports/<timestamp>/report.md`. Pass the failures directly to your AI CLI and have it fix them:
+1. **Feed the report to the agent.** Open the latest verification report at `some-podcast-app/.ui-verification/reports/<timestamp>/report.md`. Pass the failures directly to your AI CLI and have it fix them:
    ```bash
    # Kiro CLI
-   kiro-cli chat -a --no-interactive --effort max "Read the latest report in thinking-cap-podcast-app/.ui-verification/reports/ and fix all CSS failures to match thinking-cap-podcast-app/visual/design.md"
+   kiro-cli chat -a --no-interactive --effort max "Read the latest report in some-podcast-app/.ui-verification/reports/ and fix all CSS failures to match some-podcast-app/visual/design.md"
 
    # Claude Code
-   claude -p "Read thinking-cap-podcast-app/.ui-verification/reports/$(ls -t thinking-cap-podcast-app/.ui-verification/reports | head -1)/report.md. Fix all failing CSS rules to match expected values. Design spec: thinking-cap-podcast-app/visual/design.md."
+   claude -p "Read some-podcast-app/.ui-verification/reports/$(ls -t some-podcast-app/.ui-verification/reports | head -1)/report.md. Fix all failing CSS rules to match expected values. Design spec: some-podcast-app/visual/design.md."
    ```
 
 2. **Run verification again** to confirm the agent fixed things correctly. Did new failures appear?
 
 3. **Wire it to run automatically.** How would you modify the agent bridge so that when verification finishes with failures, it automatically feeds the report back to the agent and re-runs, looping until 0 failures or a max-retry limit? Think about: Where does the loop live? How do you prevent infinite retries? How does the extension know the difference between "first pass" and "retry #3"?
 
-#### Demo & win
+#### Show your demo, win a Bee!
 
 If you're feeling brave, come demo your creation to the group. The best demo wins a **Bee Pioneer device**. Show us something creative, useful, or delightfully weird. Bonus points if it's something you'd actually ship to your team on Monday.
 
@@ -531,7 +520,7 @@ If you're feeling brave, come demo your creation to the group. The best demo win
 
 ## Key Takeaways
 
-The mental models to walk away with. These ideas apply far beyond this workshop.
+The mental models to walk away with. These ideas apply far beyond the scope of this workshop.
 
 1. **Human-agent collaboration is becoming visual.** The fundamental shift: instead of describing what's wrong in a ticket or chat message, you *show* the agent by pointing at the rendered output. This is what we mean by a "perception agent," an agent that shares the same visual surface as the human and acts on what it sees. The communication channel is the UI itself.
 

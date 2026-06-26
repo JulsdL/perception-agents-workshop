@@ -90,7 +90,7 @@ function App() {
         <div className="header-inner">
           <div className="logo">
             <span className="logo-icon">🧠</span>
-            Probably Sentient Labs
+            Some Labs
           </div>
           <nav>
             <ul className="nav-links">
@@ -105,7 +105,7 @@ function App() {
       <section className="hero">
         <div className="hero-content">
           <span className="hero-badge">NEW PODCAST</span>
-          <h1>The Thinking Cap Podcast</h1>
+          <h1>Some Podcast</h1>
           <p className="hero-subtitle">
             Where researchers discuss intelligence — artificial, biological, and occasionally accidental.
           </p>
@@ -121,8 +121,8 @@ function App() {
 
         <div className="intro">
           <p>
-            We're thrilled to announce <strong><em>The Thinking Cap Podcast</em></strong>, a new podcast
-            from Probably Sentient Labs. Hosted by Dr. Mira Johansson, the show brings together
+            We're thrilled to announce <strong><em>Some Podcast</em></strong>, a new podcast
+            from Some Labs. Hosted by Dr. Mira Johansson, the show brings together
             researchers, engineers, and the occasional philosopher to explore the big questions about
             intelligence — what it is, how to build it, and whether it'll remember your name after
             a context window refresh. New episodes weekly, or whenever the inference costs clear.
@@ -161,7 +161,7 @@ function App() {
 
       <footer className="footer">
         <div className="footer-inner">
-          <p>© 2026 Probably Sentient Labs — A division of "We'll Figure It Out Eventually, Inc."</p>
+          <p>© 2026 Some Labs — A division of "We'll Figure It Out Eventually, Inc."</p>
           <p style={{ marginTop: '0.5rem' }}>
             <a href="#">Research</a> · <a href="#">Careers</a> · <a href="#">Ethics (We're Trying)</a>
           </p>

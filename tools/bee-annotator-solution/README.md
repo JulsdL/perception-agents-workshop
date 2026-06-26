@@ -16,15 +16,15 @@ Reverse proxy that listens for **completed** Bee conversations, fetches their fu
 
 ```bash
 # Make sure your dev server is running first
-cd thinking-cap-podcast-app && npm run dev
+cd some-podcast-app && npm run dev
 
 # In another terminal, from the repo root:
 node tools/bee-annotator-solution/proxy-worker.js \
   --target http://localhost:5173 \
   --port 9997 \
-  --feedback thinking-cap-podcast-app/.tmp/bee-conv-feedback.json \
+  --feedback some-podcast-app/.tmp/bee-conv-feedback.json \
   --inspector-script tools/bee-annotator-solution/inspector.js \
-  --app-dir thinking-cap-podcast-app
+  --app-dir some-podcast-app
 ```
 
 Then open `http://localhost:9997/` — you'll see the app with the Bee Conversations sidebar.

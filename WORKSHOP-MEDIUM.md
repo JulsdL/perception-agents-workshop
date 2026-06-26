@@ -229,14 +229,14 @@ Add `host_permissions` **after** the `background` block (before the final `}`):
 node tools/agent-bridge/agent-bridge.js \
   --port 9999 \
   --feedback .tmp/feedback.json \
-  --app-dir thinking-cap-podcast-app
+  --app-dir some-podcast-app
 ```
 The parameters that passed in the above command are:
 | Flag | What it does |
 |------|--------------|
 | `--port 9999` | Port the bridge listens on. The extension POSTs annotations here. |
 | `--feedback .tmp/feedback.json` | Where the bridge writes the annotations JSON so the AI CLI can read them. |
-| `--app-dir thinking-cap-podcast-app` | Your app's workspace root. The bridge runs the AI CLI and verification inside this directory. |
+| `--app-dir some-podcast-app` | Your app's workspace root. The bridge runs the AI CLI and verification inside this directory. |
 
 To use Claude Code instead of the default (Kiro):
 ```bash
@@ -248,7 +248,7 @@ You should see:
 [agent-bridge] Listening on http://localhost:9999
 ```
 
-5. Annotate elements on the browser and click "Apply Changes"
+4. Annotate elements on the browser and click "Apply Changes"
 
 ### Sample changes to make
 
@@ -272,7 +272,7 @@ The agent bridge will:
 All activity is logged to the `logs/` folder inside your app directory:
 
 ```
-thinking-cap-podcast-app/logs/
+some-podcast-app/logs/
 ├── cli/                    ← AI agent invocation logs
 │   └── 2026-06-25_14-30-00_abc123.log
 └── nova_act/               ← Nova Act SDK verification logs
@@ -291,7 +291,7 @@ If something goes wrong, check `logs/cli/` first — the most recent file will s
 Once the button turns green, open the generated verification report:
 
 ```
-thinking-cap-podcast-app/.ui-verification/reports/<timestamp>/report.md
+some-podcast-app/.ui-verification/reports/<timestamp>/report.md
 ```
 
 You can also click **"View Report"** in the extension sidebar. The report shows a summary table like this:

@@ -41,7 +41,7 @@ The agent bridge is already built for you at `tools/agent-bridge/agent-bridge.js
 4. Bridge polls the dev server to confirm it's responding
 5. Bridge runs verification:
    ```bash
-   python3 tools/agent-bridge/verify-with-nova-act.py --app-dir thinking-cap-podcast-app --url http://localhost:5173
+   python3 tools/agent-bridge/verify-with-nova-act.py --app-dir some-podcast-app --url http://localhost:5173
    ```
 6. Bridge writes `{status: "done", reportPath: "..."}` to a status file
 7. Extension polls `/api/apply/status`, sees `"done"`, shows success + report link
@@ -92,6 +92,8 @@ Open `tools/extension/content.js`. Find the line (around line 261):
 ```
 
 Add this code **between** those two lines (after `appendChild(exportBtn)`, before `appendChild(state.sidebarEl)`):
+
+**NOTE**: if you are using `vi`, you may run into issues pasting in the code below due to its size. You can either paste it in smaller chunks, or use a different editor like `nano` or using an IDE.
 
 ```javascript
     // ── Poll the agent bridge for apply job status ──
@@ -237,14 +239,14 @@ Now that the extension can talk to localhost, start the agent bridge and use it.
 node tools/agent-bridge/agent-bridge.js \
   --port 9999 \
   --feedback .tmp/feedback.json \
-  --app-dir thinking-cap-podcast-app
+  --app-dir some-podcast-app
 ```
 The parameters that passed in the above command are:
 | Flag | What it does |
 |------|--------------|
 | `--port 9999` | Port the bridge listens on. The extension POSTs annotations here. |
 | `--feedback .tmp/feedback.json` | Where the bridge writes the annotations JSON so the AI CLI can read them. |
-| `--app-dir thinking-cap-podcast-app` | Your app's workspace root. The bridge runs the AI CLI and verification inside this directory. |
+| `--app-dir some-podcast-app` | Your app's workspace root. The bridge runs the AI CLI and verification inside this directory. |
 ---
 Default AI CLI is Kiro and if you are using Claude Code add the `--cli claude` at the end:
 ```bash
@@ -259,7 +261,15 @@ You should see:
 
 ### Step 4: Annotate and apply
 
-Open http://localhost:5173 in Chrome. Use the extension to annotate elements that need changes. Point at each element and describe what you want in plain language. The AI agent figures out the rest using the design spec.
+Open http://localhost:5173 in Chrome.
+
+Note, if you need to restart your local server, you can do so with this:
+```javascript
+cd thinking-cap-podcast-app
+npm install && npm run dev
+```
+
+Use the extension to annotate elements that need changes. Point at each element and describe what you want in plain language. The AI agent figures out the rest using the design spec.
 
 ### Sample changes to make
 
@@ -284,17 +294,19 @@ Open http://localhost:5173 in Chrome. Use the extension to annotate elements tha
 
 The agent bridge will:
 - Invoke the AI agent with your annotations + the design spec
-- Agent edits source files (`src/App.css`, `src/index.css`, `src/App.jsx`)
-- Dev server hot-reloads the page
-- Verification runs automatically
+- The agent will edit the source files (`src/App.css`, `src/index.css`, `src/App.jsx`)
+- Reload the dev server and reload the podcast landing page
+- Run the verification checks
 - Button shows "✓ Changes applied" when done
+
+The entire flow takes ~5 minutes to complete so hang tight while it is doing all of the work!
 
 ### Step 5: Check the report
 
-Once the button turns green, open the generated verification report:
+Once the `Apply Changes` button turns green, the work is done. Open the generated verification report:
 
 ```
-thinking-cap-podcast-app/.ui-verification/reports/<timestamp>/report.md
+some-podcast-app/.ui-verification/reports/<timestamp>/report.md
 ```
 
 You can also click **"View Report"** in the extension sidebar. The report shows a summary table like this:
@@ -320,7 +332,7 @@ The report also includes **flow verification**: Gherkin scenarios that test inte
 
 ---
 
-## Optional: Add spinner animation
+## Optional: Add a spinner animation
 
 For a polished loading indicator on the Apply button, open `tools/extension/content.css` and add this at the very end:
 
@@ -343,7 +355,7 @@ This makes the hourglass emoji spin while the agent bridge is processing.
 
 ## Expected Time to Complete this Hands-on Exercise
 
-Most people complete this in about **20 minutes**. If you're flying through it, check out the [Bonus Challenge](WORKSHOP.md#bonus-challenge-10-mins).
+Most people complete this in about **15 minutes**. If you're flying through it, check out the [Bonus Challenge](WORKSHOP.md#bonus-challenge-10-mins).
 
 
 > [← Back to main workshop](WORKSHOP.md#ai-powered-ui-verification-challenge)
