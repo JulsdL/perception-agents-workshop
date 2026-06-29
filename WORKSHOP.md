@@ -230,8 +230,8 @@ You can invoke the skill in three ways:
 | Command | What runs |
 |---------|-----------|
 | `Verify http://localhost:5173/ matches the design spec` | Visual checks only |
-| `Run flows on http://localhost:5174/` | Flow checks only |
-| `Verify http://localhost:5174/` | Both (visual first, then flows, into one combined report) |
+| `Run flows on http://localhost:5173/` | Flow checks only |
+| `Verify http://localhost:5173/` | Both (visual first, then flows, into one combined report) |
 
 **Visual verification** reads spec files from `.ui-verification/specs/`, translates each claim into a deterministic `getComputedStyle()` check against the live DOM, and reports pass/fail per rule.
 
