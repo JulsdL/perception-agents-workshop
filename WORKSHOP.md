@@ -485,10 +485,7 @@ node tools/bee-annotator-solution/proxy-worker.js \
 - **"Verifying..."** — Nova Act is running CSS checks and flow assertions
 - **"✓ Verification complete"** — done, with a **"View Report"** link
 
-```bash
-# In your AI CLI
-/ui-verification verify http://localhost:5173 
-```
+**8. Check the report.** Click the "View Report" link in the sidebar, or open `http://localhost:9997/api/bee/report/view` directly. The report shows pass/fail for all CSS rules and Gherkin flow scenarios.
 
 #### Tips
 
