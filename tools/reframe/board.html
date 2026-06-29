@@ -1028,7 +1028,9 @@
         }
         break;
       case "status":
-        setStatus(msg.bee || "connected", !!msg.thinking);
+        // Receiving a status event means the live stream is alive → show green.
+        // (Bee's own status is irrelevant when input comes from the browser mic.)
+        setStatus("connected", !!msg.thinking);
         break;
       default:
         break;
