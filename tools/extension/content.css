@@ -891,3 +891,14 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
+
+/* Hourglass spinning animation for loading states */
+@keyframes annot-hourglass-spin {
+  0% { transform: rotate(0deg); }
+  50% { transform: rotate(180deg); }
+  100% { transform: rotate(360deg); }
+}
+.annot-sidebar-export .annot-spinner {
+  display: inline-block;
+  animation: annot-hourglass-spin 1.5s ease-in-out infinite;
+}

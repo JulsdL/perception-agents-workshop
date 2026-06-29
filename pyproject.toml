@@ -1,0 +1,29 @@
+# Consolidated Python environment for the perception-agents workshop + Reframe demo.
+# Managed with uv:
+#   uv venv .venv --python 3.12
+#   uv pip install -r tools/agent-bridge/requirements.txt   # (equivalent to the deps below)
+#   # or, from this pyproject:
+#   uv pip install -e .
+#
+# Note: tools/agent-bridge/requirements.txt is auto-generated upstream and kept as-is;
+# this file is the consolidated, human-maintained source of truth for the whole repo.
+[project]
+name = "perception-agents-workshop"
+version = "0.1.0"
+description = "AI-powered UI verification workshop + Reframe live thinking-canvas contest demo"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0",
+    "flask>=2.0",
+    "playwright>=1.40",
+    "pillow>=10.0",
+    "nova-act>=3.4.187.0",
+]
+
+# The Reframe demo backend (tools/reframe/) is pure Node.js (built-ins only) and the
+# AI "brain" shells out to the `claude` CLI — no extra Python deps required.
+# The Bee CLI is a separate Node global install (see WORKSHOP.md):
+#   npm install -g @beeai/cli
+
+[tool.uv]
+package = false

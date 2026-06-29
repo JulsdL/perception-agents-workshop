@@ -1,0 +1,16 @@
+[
+  { "speaker": "Alex", "text": "Alright team, let's plan the next quarter for the mobile app." },
+  { "speaker": "Sam", "text": "I think onboarding is our biggest drop-off, we lose half the users on the first screen." },
+  { "speaker": "Jordan", "text": "We should add a guided three-step tutorial the first time someone opens the app." },
+  { "speaker": "Alex", "text": "Yeah totally, makes sense." },
+  { "speaker": "Sam", "text": "What if we let people skip the signup and try the app as a guest first?" },
+  { "speaker": "Jordan", "text": "Another idea: push notifications to bring back users who went quiet for a week." },
+  { "speaker": "Alex", "text": "A risk there is notification fatigue, people might just turn them off or churn." },
+  { "speaker": "Sam", "text": "Can we see this as a mindmap?" },
+  { "speaker": "Jordan", "text": "We need a faster image upload, right now it takes like eight seconds on mobile data." },
+  { "speaker": "Alex", "text": "Let's decide that guest mode ships in the first sprint, it unblocks the onboarding work." },
+  { "speaker": "Sam", "text": "We should also redesign the settings screen, it's cluttered and hard to navigate." },
+  { "speaker": "Jordan", "text": "Question: do we have the budget to add a second backend engineer this quarter?" },
+  { "speaker": "Alex", "text": "Group these by priority so we know what to tackle first." },
+  { "speaker": "Sam", "text": "Last thing, we should run a quick usability test with five users before we ship anything." }
+]

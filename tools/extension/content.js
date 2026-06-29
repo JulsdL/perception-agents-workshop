@@ -258,7 +258,135 @@
     state.sidebarEl.appendChild(notesLabel);
     state.sidebarEl.appendChild(sidebarList);
     state.sidebarEl.appendChild(exportBtn);
-   // Add code here
+
+    // ── Poll the agent bridge for apply job status ──
+    // Called after successfully POSTing annotations to /api/apply.
+    // Checks every 3 seconds until the job completes or fails.
+    function pollApplyStatus(btn) {
+      var pollInterval = setInterval(function () {
+        fetch("http://localhost:9999/api/apply/status").then(function (r) { return r.json(); }).then(function (s) {
+
+          // Agent is still editing source files
+          if (s.status === "running") {
+            btn.innerHTML = "<span class='annot-spinner'>⏳</span> Applying...";
+
+          // Agent finished edits; Nova Act verification is running
+          } else if (s.status === "verifying") {
+            btn.innerHTML = "<span class='annot-spinner'>⏳</span> Running verification...";
+
+          // Everything succeeded — show results
+          } else if (s.status === "done") {
+            clearInterval(pollInterval);
+            btn.textContent = "✓ Changes applied";
+            btn.style.background = "#2E7D32";
+            btn.disabled = false;
+
+            // Add a "View Report" button if the agent bridge returned a report path
+            if (s.reportPath && !state.sidebarEl.querySelector("[data-role='view-report']")) {
+              var vrBtn = document.createElement("button");
+              vrBtn.className = "annot-sidebar-export";
+              vrBtn.dataset.role = "view-report";
+              vrBtn.dataset.reportPath = s.reportPath;
+              vrBtn.textContent = "View Report";
+              vrBtn.style.cssText = "background:#2E7D32;color:#fff;margin-top:6px;";
+              vrBtn.addEventListener("click", function () { window.open("http://localhost:9999/api/report/view"); });
+              if (btn.parentNode) btn.parentNode.insertBefore(vrBtn, btn.nextSibling);
+            }
+            // Update existing report button if re-running
+            var existingReport = state.sidebarEl.querySelector("[data-role='view-report']");
+            if (existingReport && s.reportPath) {
+              existingReport.style.display = "block";
+              existingReport.dataset.reportPath = s.reportPath;
+            }
+
+            // Add a "Reset" button to clear annotations and start fresh
+            if (!state.sidebarEl.querySelector("[data-role='reset-btn']")) {
+              var rstBtn = document.createElement("button");
+              rstBtn.className = "annot-sidebar-export";
+              rstBtn.dataset.role = "reset-btn";
+              rstBtn.textContent = "Reset";
+              rstBtn.style.cssText = "background:#4A4A4A;color:#ccc;margin-top:6px;font-size:12px;";
+              rstBtn.addEventListener("click", function () {
+                state.annotations.length = 0;
+                fetch("http://localhost:9999/api/feedback", { method: "DELETE" }).catch(function () {});
+                I.rebuildSidebar(state);
+              });
+              state.sidebarEl.appendChild(rstBtn);
+            }
+
+            // Show a toast notification in the bottom-right corner
+            var notification = document.createElement("div");
+            notification.style.cssText = "position:fixed;bottom:20px;right:20px;background:#1A1A1A;border:1px solid #5A969E;border-radius:8px;padding:12px 16px;color:#E8E8E8;font-family:-apple-system,sans-serif;font-size:13px;z-index:2147483647;box-shadow:0 4px 12px rgba(0,0,0,0.4);";
+            notification.innerHTML = "<div style='font-weight:600;margin-bottom:6px;'>✓ Changes applied & verified</div>" +
+              (s.reportPath ? "<a href='http://localhost:9999/api/report/view' style='color:#5A969E;text-decoration:underline;font-size:12px;' target='_blank'>View verification report</a>" : "<span style='font-size:12px;color:#6C7778;'>No report generated</span>");
+            var closeNotif = document.createElement("span");
+            closeNotif.textContent = "×"; closeNotif.style.cssText = "position:absolute;top:8px;right:10px;cursor:pointer;color:#6C7778;font-size:16px;";
+            closeNotif.addEventListener("click", function () { notification.remove(); });
+            notification.appendChild(closeNotif);
+            document.body.appendChild(notification);
+            setTimeout(function () { notification.remove(); }, 15000);
+
+          // Agent or verification failed
+          } else if (s.status === "error") {
+            clearInterval(pollInterval);
+            btn.textContent = "Failed";
+            btn.style.background = "#8B3A3A";
+            setTimeout(function () { btn.textContent = "Apply changes"; btn.style.background = "#5A969E"; btn.disabled = false; }, 4000);
+
+          // Job was never started (shouldn't normally happen)
+          } else if (s.status === "idle") {
+            clearInterval(pollInterval);
+            btn.textContent = "Not started";
+            btn.style.background = "#8B3A3A";
+            setTimeout(function () { btn.textContent = "Apply changes"; btn.style.background = "#5A969E"; btn.disabled = false; }, 4000);
+          }
+        }).catch(function () {});
+      }, 3000);
+    }
+
+    // ── Create the "Apply changes" button ──
+    var applyBtn = document.createElement("button");
+    applyBtn.className = "annot-sidebar-export";
+    applyBtn.textContent = "Apply changes";
+    applyBtn.style.cssText = "background:#5A969E;color:#fff;margin-top:6px;";
+    applyBtn.addEventListener("click", function () {
+      // Don't do anything if there are no annotations yet
+      if (state.annotations.length === 0) return;
+
+      // Safety check: only allow on localhost (not on live websites)
+      if (!window.location.hostname.match(/^(localhost|127\.0\.0\.1)$/)) {
+        applyBtn.textContent = "Local apps only";
+        applyBtn.style.background = "#8B3A3A";
+        setTimeout(function () { applyBtn.textContent = "Apply changes"; applyBtn.style.background = "#5A969E"; }, 3000);
+        return;
+      }
+
+      // Disable button and show loading state
+      applyBtn.disabled = true; applyBtn.innerHTML = "<span class='annot-spinner'>⏳</span> Applying...";
+      applyBtn.style.background = "#3A6778";
+
+      // POST annotations to the agent bridge which invokes the AI agent
+      fetch("http://localhost:9999/api/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ annotations: state.annotations, url: window.location.href })
+      }).then(function (r) { return r.json(); }).then(function (data) {
+        if (!data.ok) {
+          applyBtn.textContent = "Error";
+          applyBtn.style.background = "#8B3A3A";
+          setTimeout(function () { applyBtn.textContent = "Apply changes"; applyBtn.style.background = "#5A969E"; applyBtn.disabled = false; }, 3000);
+          return;
+        }
+        // Job accepted — start polling for status
+        pollApplyStatus(applyBtn);
+      }).catch(function () {
+        applyBtn.textContent = "Bridge not running";
+        applyBtn.style.background = "#8B3A3A";
+        setTimeout(function () { applyBtn.textContent = "Apply changes"; applyBtn.style.background = "#5A969E"; applyBtn.disabled = false; }, 4000);
+      });
+    });
+    state.sidebarEl.appendChild(applyBtn);
+
     document.body.appendChild(state.sidebarEl);
 
     state.drawOverlay.addEventListener("mousedown", onDrawMouseDown);

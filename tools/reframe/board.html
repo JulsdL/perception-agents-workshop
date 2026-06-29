@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Reframe — Live Thinking Canvas</title>
+<style>
+  /*
+   * Reframe — a live "thinking canvas".
+   * Single self-contained file. Pure HTML + CSS + vanilla JS + inline SVG.
+   * Served by reframe-server.js at GET /. Conforms to tools/reframe/CONTRACT.md.
+   */
+  :root {
+    --accent: #5A969E;
+    --accent-bright: #7FD4DE;
+    --bg: #0c1013;
+    --bg-2: #141a1f;
+    --bg-3: #1b232a;
+    --panel: #161d23;
+    --line: #2a353d;
+    --text: #eef4f6;
+    --text-dim: #9fb1ba;
+    --text-faint: #647884;
+    --good: #4ade80;
+    --warn: #f5b54a;
+    --bad: #ef5d63;
+    --shadow: 0 10px 30px rgba(0,0,0,.45);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(90,150,158,.18), transparent 60%),
+      radial-gradient(900px 500px at 0% 110%, rgba(90,150,158,.10), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ============ HEADER ============ */
+  header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 14px 24px;
+    background: linear-gradient(180deg, rgba(22,29,35,.96), rgba(18,24,29,.92));
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 4px 18px rgba(0,0,0,.35);
+    z-index: 10;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  .logo {
+    font-weight: 900;
+    font-size: 26px;
+    letter-spacing: 1px;
+    color: var(--bg);
+    background: linear-gradient(135deg, var(--accent-bright), var(--accent));
+    padding: 4px 12px;
+    border-radius: 10px;
+    box-shadow: 0 0 22px rgba(127,212,222,.45);
+    flex: 0 0 auto;
+  }
+  .titles { min-width: 0; }
+  .session-title {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 38vw;
+  }
+  .subtitle {
+    font-size: 12px;
+    color: var(--text-faint);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .conn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-dim);
+    padding: 6px 12px;
+    background: var(--bg-3);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+  }
+  .dot {
+    width: 11px; height: 11px;
+    border-radius: 50%;
+    background: var(--text-faint);
+    box-shadow: 0 0 0 0 rgba(0,0,0,0);
+    transition: background .3s;
+  }
+  .dot.connected   { background: var(--good); box-shadow: 0 0 10px var(--good); }
+  .dot.connecting  { background: var(--warn); box-shadow: 0 0 10px var(--warn); animation: pulse 1s infinite; }
+  .dot.disconnected{ background: var(--bad);  box-shadow: 0 0 10px var(--bad); }
+
+  .thinking {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--accent-bright);
+    padding: 6px 12px;
+    background: rgba(90,150,158,.12);
+    border: 1px solid rgba(127,212,222,.35);
+    border-radius: 999px;
+  }
+  .thinking.on { display: flex; }
+  .thinking .td {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent-bright);
+    animation: blink 1.2s infinite;
+  }
+  .thinking .td:nth-child(2){ animation-delay:.2s; }
+  .thinking .td:nth-child(3){ animation-delay:.4s; }
+
+  .coverage {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid;
+    white-space: nowrap;
+  }
+  .coverage.good { color: var(--good); border-color: rgba(74,222,128,.4); background: rgba(74,222,128,.10); }
+  .coverage.warn { color: var(--warn); border-color: rgba(245,181,74,.4); background: rgba(245,181,74,.10); }
+  .coverage .cv-ico { font-size: 15px; }
+
+  .spacer { flex: 1 1 auto; }
+
+  .switcher {
+    display: flex;
+    background: var(--bg-3);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 3px;
+    gap: 2px;
+  }
+  .switcher button {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .18s;
+    letter-spacing: .3px;
+  }
+  .switcher button:hover { color: var(--text); }
+  .switcher button.active {
+    background: linear-gradient(135deg, var(--accent), #3f6f76);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(90,150,158,.4);
+  }
+
+  .btn {
+    appearance: none;
+    border: 1px solid var(--line);
+    background: var(--bg-3);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all .18s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent-bright); }
+  .btn.accent {
+    background: linear-gradient(135deg, var(--accent-bright), var(--accent));
+    color: var(--bg);
+    border-color: transparent;
+  }
+
+  /* ============ CANVAS ============ */
+  main {
+    flex: 1 1 auto;
+    overflow: auto;
+    position: relative;
+    padding: 24px;
+  }
+  .empty {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-faint);
+    gap: 12px;
+    text-align: center;
+  }
+  .empty .big { font-size: 64px; opacity: .35; }
+  .empty .msg { font-size: 18px; }
+
+  /* ---- BOARD view ---- */
+  .board {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    min-height: 100%;
+  }
+  .column {
+    flex: 0 0 320px;
+    width: 320px;
+    background: rgba(20,26,31,.6);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .col-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: .3px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid;
+  }
+  .col-head .swatch { width: 14px; height: 14px; border-radius: 4px; flex: 0 0 auto; }
+  .col-head .count {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-dim);
+    background: var(--bg-3);
+    padding: 2px 9px;
+    border-radius: 999px;
+  }
+  .card {
+    position: relative;
+    background: linear-gradient(160deg, var(--bg-2), var(--bg-3));
+    border-radius: 12px;
+    padding: 14px 14px 12px;
+    border-left: 4px solid var(--accent);
+    box-shadow: var(--shadow);
+    font-size: 15px;
+    line-height: 1.35;
+  }
+  .card .kind {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+  }
+  .card .ctext { color: var(--text); }
+  .card .child-of {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-faint);
+    font-style: italic;
+  }
+
+  /* kind colors */
+  .k-idea     { background: rgba(127,212,222,.16); color: var(--accent-bright); }
+  .k-action   { background: rgba(74,222,128,.16);  color: var(--good); }
+  .k-question { background: rgba(245,181,74,.16);  color: var(--warn); }
+  .k-decision { background: rgba(167,139,250,.18); color: #c4b5fd; }
+  .k-risk     { background: rgba(239,93,99,.16);   color: var(--bad); }
+
+  /* ---- LIST view ---- */
+  .list { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 26px; }
+  .list-section { }
+  .list-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 21px;
+    font-weight: 800;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid;
+  }
+  .list-head .swatch { width: 16px; height: 16px; border-radius: 5px; }
+  .list-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .list-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 16px;
+  }
+  .list-item .bullet { color: var(--accent); font-size: 18px; line-height: 1.4; }
+  .list-item.nested { margin-left: 34px; border-left: 3px solid var(--line); }
+  .list-item .li-text { flex: 1; line-height: 1.4; }
+
+  /* ---- MINDMAP view ---- */
+  .mindmap-wrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+  svg.mindmap { width: 100%; height: 100%; display: block; }
+  svg.mindmap text { font-family: inherit; }
+
+  /* ---- TABLE / TIMELINE fallback ---- */
+  table.reframe-table {
+    width: 100%;
+    max-width: 1100px;
+    margin: 0 auto;
+    border-collapse: collapse;
+    font-size: 15px;
+  }
+  table.reframe-table th, table.reframe-table td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  table.reframe-table th { color: var(--text-dim); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  table.reframe-table tr:hover td { background: var(--bg-2); }
+
+  .timeline { max-width: 900px; margin: 0 auto; border-left: 2px solid var(--line); padding-left: 24px; display: flex; flex-direction: column; gap: 18px; }
+  .tl-item { position: relative; }
+  .tl-item::before {
+    content: ""; position: absolute; left: -31px; top: 4px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 10px var(--accent);
+  }
+
+  /* ============ FOOTER ============ */
+  footer {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 24px;
+    background: rgba(12,16,19,.95);
+    border-top: 1px solid var(--line);
+    font-size: 15px;
+    color: var(--text-dim);
+    min-height: 48px;
+  }
+  footer .mic { font-size: 18px; }
+  footer .utt { color: var(--text); }
+  footer .utt b { color: var(--accent-bright); }
+  footer .mock-badge {
+    margin-left: auto;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--warn);
+    border: 1px solid rgba(245,181,74,.4);
+    padding: 3px 10px;
+    border-radius: 999px;
+  }
+
+  /* ============ ANIMATIONS ============ */
+  @keyframes pulse { 0%,100%{ opacity:1 } 50%{ opacity:.3 } }
+  @keyframes blink { 0%,100%{ transform: scale(.6); opacity:.4 } 50%{ transform: scale(1); opacity:1 } }
+  @keyframes enter {
+    from { opacity: 0; transform: translateY(14px) scale(.92); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes svgEnter {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .enter { animation: enter .45s cubic-bezier(.2,.9,.3,1.2) both; }
+  .svg-enter { animation: svgEnter .6s ease both; }
+
+  /* scrollbars */
+  ::-webkit-scrollbar { height: 12px; width: 12px; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo">Reframe</div>
+      <div class="titles">
+        <div class="session-title" id="sessionTitle">Waiting for ideas…</div>
+        <div class="subtitle">Live thinking canvas</div>
+      </div>
+    </div>
+
+    <div class="conn" title="Bee connection">
+      <span class="dot disconnected" id="connDot"></span>
+      <span id="connLabel">disconnected</span>
+    </div>
+
+    <div class="thinking" id="thinking">
+      <span class="td"></span><span class="td"></span><span class="td"></span>
+      <span>thinking…</span>
+    </div>
+
+    <div class="coverage good" id="coverage">
+      <span class="cv-ico">✓</span><span id="coverageText">0/0 ideas captured · 0 lost</span>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="switcher" id="switcher">
+      <button data-view="board" class="active">Board</button>
+      <button data-view="list">List</button>
+      <button data-view="mindmap">Mindmap</button>
+    </div>
+
+    <a class="btn accent" id="exportBtn" href="/api/reframe/export" target="_blank" rel="noopener">⤓ Export</a>
+  </header>
+
+  <main id="canvas">
+    <div class="empty">
+      <div class="big">🧠</div>
+      <div class="msg">Connecting to the live stream…</div>
+    </div>
+  </main>
+
+  <footer>
+    <span class="mic">🎙</span>
+    <span class="utt" id="utterance">Listening…</span>
+    <span class="mock-badge" id="mockBadge" style="display:none;">Mock mode</span>
+    <button class="btn" id="mockAddBtn" style="display:none;">＋ add mock idea</button>
+  </footer>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------------------------------------------------------------------------
+  // Config / globals
+  // ---------------------------------------------------------------------------
+  const params = new URLSearchParams(location.search);
+  const MOCK = params.get("mock") === "1";
+
+  let state = null;            // full state per CONTRACT §1
+  let manualView = null;       // user-forced view (overrides state.view.type) until next state arrives
+  const knownNodeIds = new Set();  // for enter animations
+  let firstRenderDone = false;
+  let es = null;               // EventSource
+  let reconnectTimer = null;
+
+  const el = (id) => document.getElementById(id);
+  const canvas = el("canvas");
+
+  // Fallback palette if a cluster has no color
+  const PALETTE = ["#5A969E","#C77DFF","#4ADE80","#F5B54A","#EF5D63","#7FD4DE","#A78BFA","#F472B6"];
+
+  // ---------------------------------------------------------------------------
+  // Connection status (dot + thinking pulse)
+  // ---------------------------------------------------------------------------
+  function setStatus(bee, thinking) {
+    const dot = el("connDot");
+    const label = el("connLabel");
+    const map = { connected: "connected", connecting: "connecting", disconnected: "disconnected" };
+    const cls = map[bee] || "disconnected";
+    dot.className = "dot " + cls;
+    label.textContent = cls;
+    el("thinking").classList.toggle("on", !!thinking);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Header bits driven by state
+  // ---------------------------------------------------------------------------
+  function renderHeader() {
+    el("sessionTitle").textContent = (state && state.title) || "Untitled session";
+
+    const cov = (state && state.coverage) || { total: 0, covered: 0, lost: [] };
+    const lostCount = Array.isArray(cov.lost) ? cov.lost.length : (cov.lost || 0);
+    const covEl = el("coverage");
+    const good = lostCount === 0;
+    covEl.className = "coverage " + (good ? "good" : "warn");
+    covEl.querySelector(".cv-ico").textContent = good ? "✓" : "!";
+    el("coverageText").textContent =
+      `${cov.covered || 0}/${cov.total || 0} ideas captured · ${lostCount} lost`;
+
+    // view switcher active state
+    const active = currentView();
+    document.querySelectorAll("#switcher button").forEach((b) => {
+      b.classList.toggle("active", b.dataset.view === active);
+    });
+
+    // footer utterance: most recent source
+    const utt = el("utterance");
+    const sources = (state && state.sources) || [];
+    if (sources.length) {
+      const last = sources[sources.length - 1];
+      const who = last.speaker ? last.speaker : "Voice";
+      utt.innerHTML = `<b>${esc(who)}:</b> ${esc(last.text)}`;
+    } else {
+      utt.textContent = "Listening…";
+    }
+  }
+
+  function currentView() {
+    if (manualView) return manualView;
+    const t = state && state.view && state.view.type;
+    return t || "board";
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+  function clusterColor(cl, idx) {
+    if (cl && cl.color) return cl.color;
+    return PALETTE[idx % PALETTE.length];
+  }
+  function nodesOf(clusterId) {
+    return (state.nodes || []).filter((n) => n.cluster === clusterId);
+  }
+  function clusterById(id) {
+    return (state.clusters || []).find((c) => c.id === id);
+  }
+  function isNew(nodeId) {
+    return firstRenderDone && !knownNodeIds.has(nodeId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Main render dispatcher (pure function of state)
+  // ---------------------------------------------------------------------------
+  function render() {
+    renderHeader();
+
+    if (!state || (!(state.nodes || []).length && !(state.clusters || []).length)) {
+      canvas.innerHTML = `<div class="empty">
+        <div class="big">🧠</div>
+        <div class="msg">No ideas captured yet — start talking.</div>
+      </div>`;
+      markSeen();
+      return;
+    }
+
+    const view = currentView();
+    switch (view) {
+      case "list":     renderList(); break;
+      case "mindmap":  renderMindmap(); break;
+      case "table":    renderTable(); break;
+      case "timeline": renderTimeline(); break;
+      case "board":
+      default:         renderBoard(); break;
+    }
+
+    markSeen();
+    firstRenderDone = true;
+  }
+
+  function markSeen() {
+    (state && state.nodes || []).forEach((n) => knownNodeIds.add(n.id));
+  }
+
+  // ---------------------------------------------------------------------------
+  // BOARD view — one column per cluster, sticky-note cards
+  // ---------------------------------------------------------------------------
+  function renderBoard() {
+    const clusters = state.clusters || [];
+    const wrap = document.createElement("div");
+    wrap.className = "board";
+
+    // unclustered nodes get a synthetic column
+    const used = new Set(clusters.map((c) => c.id));
+    const orphanNodes = (state.nodes || []).filter((n) => !used.has(n.cluster));
+
+    clusters.forEach((cl, idx) => {
+      const color = clusterColor(cl, idx);
+      const col = document.createElement("div");
+      col.className = "column";
+      const nodes = nodesOf(cl.id);
+      col.innerHTML = `<div class="col-head" style="border-color:${color}; color:${color};">
+        <span class="swatch" style="background:${color}"></span>
+        <span>${esc(cl.label)}</span>
+        <span class="count">${nodes.length}</span>
+      </div>`;
+      nodes.forEach((n) => col.appendChild(cardEl(n, color)));
+      wrap.appendChild(col);
+    });
+
+    if (orphanNodes.length) {
+      const col = document.createElement("div");
+      col.className = "column";
+      col.innerHTML = `<div class="col-head" style="border-color:var(--line); color:var(--text-dim);">
+        <span class="swatch" style="background:var(--text-faint)"></span>
+        <span>Unclustered</span>
+        <span class="count">${orphanNodes.length}</span>
+      </div>`;
+      orphanNodes.forEach((n) => col.appendChild(cardEl(n, "#647884")));
+      wrap.appendChild(col);
+    }
+
+    canvas.innerHTML = "";
+    canvas.appendChild(wrap);
+  }
+
+  function cardEl(n, color) {
+    const card = document.createElement("div");
+    card.className = "card" + (isNew(n.id) ? " enter" : "");
+    card.style.borderLeftColor = color;
+    const kind = (n.kind || "idea").toLowerCase();
+    let parentNote = "";
+    if (n.parent) {
+      const p = (state.nodes || []).find((x) => x.id === n.parent);
+      if (p) parentNote = `<div class="child-of">↳ refines: ${esc(p.text)}</div>`;
+    }
+    card.innerHTML =
+      `<span class="kind k-${kind}">${esc(kind)}</span>` +
+      `<div class="ctext">${esc(n.text)}</div>` +
+      parentNote;
+    return card;
+  }
+
+  // ---------------------------------------------------------------------------
+  // LIST view — clusters as sections, nodes as bullets with kind tag
+  // ---------------------------------------------------------------------------
+  function renderList() {
+    const clusters = state.clusters || [];
+    const wrap = document.createElement("div");
+    wrap.className = "list";
+
+    const groups = clusters.map((c, i) => ({ cl: c, color: clusterColor(c, i), nodes: nodesOf(c.id) }));
+    const used = new Set(clusters.map((c) => c.id));
+    const orphans = (state.nodes || []).filter((n) => !used.has(n.cluster));
+    if (orphans.length) groups.push({ cl: { label: "Unclustered" }, color: "#647884", nodes: orphans });
+
+    groups.forEach(({ cl, color, nodes }) => {
+      const sec = document.createElement("div");
+      sec.className = "list-section";
+      sec.innerHTML = `<div class="list-head" style="border-color:${color}; color:${color};">
+        <span class="swatch" style="background:${color}"></span>${esc(cl.label)}
+      </div>`;
+      const ul = document.createElement("ul");
+      ul.className = "list-items";
+      // top-level first, then children nested under
+      const top = nodes.filter((n) => !n.parent || !nodes.some((m) => m.id === n.parent));
+      const order = [];
+      top.forEach((n) => {
+        order.push({ n, nested: false });
+        nodes.filter((c) => c.parent === n.id).forEach((c) => order.push({ n: c, nested: true }));
+      });
+      // include any not captured above
+      nodes.forEach((n) => { if (!order.some((o) => o.n.id === n.id)) order.push({ n, nested: false }); });
+
+      order.forEach(({ n, nested }) => {
+        const li = document.createElement("li");
+        li.className = "list-item" + (nested ? " nested" : "") + (isNew(n.id) ? " enter" : "");
+        const kind = (n.kind || "idea").toLowerCase();
+        li.innerHTML =
+          `<span class="bullet">${nested ? "↳" : "•"}</span>` +
+          `<span class="kind k-${kind}">${esc(kind)}</span>` +
+          `<span class="li-text">${esc(n.text)}</span>`;
+        ul.appendChild(li);
+      });
+      sec.appendChild(ul);
+      wrap.appendChild(sec);
+    });
+
+    canvas.innerHTML = "";
+    canvas.appendChild(wrap);
+  }
+
+  // ---------------------------------------------------------------------------
+  // MINDMAP view — radial SVG: center title → clusters → nodes/children
+  // ---------------------------------------------------------------------------
+  function renderMindmap() {
+    const W = Math.max(canvas.clientWidth, 800);
+    const H = Math.max(canvas.clientHeight, 600);
+    const cx = W / 2, cy = H / 2;
+    const clusters = state.clusters || [];
+    const NS = "http://www.w3.org/2000/svg";
+
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "mindmap");
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+    const ringR = Math.min(W, H) * 0.26;     // cluster ring radius
+    const leafR = Math.min(W, H) * 0.42;     // node radius
+
+    const line = (x1, y1, x2, y2, color, w) => {
+      const l = document.createElementNS(NS, "line");
+      l.setAttribute("x1", x1); l.setAttribute("y1", y1);
+      l.setAttribute("x2", x2); l.setAttribute("y2", y2);
+      l.setAttribute("stroke", color); l.setAttribute("stroke-width", w);
+      l.setAttribute("stroke-linecap", "round");
+      l.setAttribute("opacity", "0.55");
+      return l;
+    };
+    const wrapText = (str, max) => {
+      const words = String(str).split(/\s+/);
+      let lines = [], cur = "";
+      words.forEach((w) => {
+        if ((cur + " " + w).trim().length > max) { if (cur) lines.push(cur); cur = w; }
+        else cur = (cur + " " + w).trim();
+      });
+      if (cur) lines.push(cur);
+      return lines.slice(0, 3);
+    };
+
+    // edges first (under nodes)
+    const nClusters = clusters.length || 1;
+    const clusterPos = [];
+    clusters.forEach((cl, i) => {
+      const ang = (-Math.PI / 2) + (i / nClusters) * Math.PI * 2;
+      const x = cx + Math.cos(ang) * ringR;
+      const y = cy + Math.sin(ang) * ringR;
+      const color = clusterColor(cl, i);
+      clusterPos.push({ x, y, ang, color, cl });
+      svg.appendChild(line(cx, cy, x, y, color, 3));
+    });
+
+    // node leaves
+    clusterPos.forEach((cp, ci) => {
+      const nodes = nodesOf(cp.cl.id);
+      const span = Math.PI / Math.max(nClusters, 3) * 1.7; // angular spread around cluster
+      nodes.forEach((n, j) => {
+        const t = nodes.length === 1 ? 0 : (j / (nodes.length - 1) - 0.5);
+        const ang = cp.ang + t * span;
+        const x = cx + Math.cos(ang) * leafR;
+        const y = cy + Math.sin(ang) * leafR;
+        n._mx = x; n._my = y;
+        svg.appendChild(line(cp.x, cp.y, x, y, cp.color, 1.6));
+      });
+      // child links node->parent already drawn through cluster; draw explicit parent links
+      nodes.forEach((n) => {
+        if (n.parent) {
+          const p = nodes.find((m) => m.id === n.parent);
+          if (p && p._mx != null && n._mx != null) {
+            svg.appendChild(line(p._mx, p._my, n._mx, n._my, cp.color, 1.2));
+          }
+        }
+      });
+    });
+
+    // node circles + labels
+    clusterPos.forEach((cp, ci) => {
+      const nodes = nodesOf(cp.cl.id);
+      nodes.forEach((n) => {
+        const g = document.createElementNS(NS, "g");
+        if (isNew(n.id)) g.setAttribute("class", "svg-enter");
+        const c = document.createElementNS(NS, "circle");
+        c.setAttribute("cx", n._mx); c.setAttribute("cy", n._my);
+        c.setAttribute("r", 7);
+        c.setAttribute("fill", "#141a1f");
+        c.setAttribute("stroke", cp.color);
+        c.setAttribute("stroke-width", 2.5);
+        g.appendChild(c);
+
+        const txt = document.createElementNS(NS, "text");
+        const onRight = n._mx >= cx;
+        txt.setAttribute("x", n._mx + (onRight ? 12 : -12));
+        txt.setAttribute("y", n._my);
+        txt.setAttribute("text-anchor", onRight ? "start" : "end");
+        txt.setAttribute("dominant-baseline", "middle");
+        txt.setAttribute("fill", "#eef4f6");
+        txt.setAttribute("font-size", "14");
+        txt.setAttribute("font-weight", "500");
+        const lines = wrapText(n.text, 22);
+        lines.forEach((ln, k) => {
+          const ts = document.createElementNS(NS, "tspan");
+          ts.setAttribute("x", n._mx + (onRight ? 12 : -12));
+          ts.setAttribute("dy", k === 0 ? `${-(lines.length - 1) * 0.55}em` : "1.1em");
+          ts.textContent = ln;
+          txt.appendChild(ts);
+        });
+        g.appendChild(txt);
+        svg.appendChild(g);
+      });
+    });
+
+    // cluster bubbles (on top of edges)
+    clusterPos.forEach((cp) => {
+      const g = document.createElementNS(NS, "g");
+      const c = document.createElementNS(NS, "circle");
+      c.setAttribute("cx", cp.x); c.setAttribute("cy", cp.y);
+      c.setAttribute("r", 13);
+      c.setAttribute("fill", cp.color);
+      c.setAttribute("stroke", "#0c1013");
+      c.setAttribute("stroke-width", 3);
+      g.appendChild(c);
+      const txt = document.createElementNS(NS, "text");
+      txt.setAttribute("x", cp.x);
+      txt.setAttribute("y", cp.y - 22);
+      txt.setAttribute("text-anchor", "middle");
+      txt.setAttribute("fill", cp.color);
+      txt.setAttribute("font-size", "17");
+      txt.setAttribute("font-weight", "800");
+      txt.textContent = cp.cl.label;
+      g.appendChild(txt);
+      svg.appendChild(g);
+    });
+
+    // center node (session title)
+    const ring = document.createElementNS(NS, "circle");
+    ring.setAttribute("cx", cx); ring.setAttribute("cy", cy);
+    ring.setAttribute("r", 46);
+    ring.setAttribute("fill", "url(#bamGrad)");
+    ring.setAttribute("stroke", "#7FD4DE");
+    ring.setAttribute("stroke-width", 3);
+
+    const defs = document.createElementNS(NS, "defs");
+    defs.innerHTML =
+      `<radialGradient id="bamGrad"><stop offset="0%" stop-color="#1b232a"/><stop offset="100%" stop-color="#0c1013"/></radialGradient>`;
+    svg.appendChild(defs);
+    svg.appendChild(ring);
+
+    const ctitle = document.createElementNS(NS, "text");
+    ctitle.setAttribute("x", cx); ctitle.setAttribute("y", cy);
+    ctitle.setAttribute("text-anchor", "middle");
+    ctitle.setAttribute("dominant-baseline", "middle");
+    ctitle.setAttribute("fill", "#fff");
+    ctitle.setAttribute("font-size", "16");
+    ctitle.setAttribute("font-weight", "800");
+    wrapText(state.title || "Session", 16).forEach((ln, k, arr) => {
+      const ts = document.createElementNS(NS, "tspan");
+      ts.setAttribute("x", cx);
+      ts.setAttribute("dy", k === 0 ? `${-(arr.length - 1) * 0.55}em` : "1.1em");
+      ts.textContent = ln;
+      ctitle.appendChild(ts);
+    });
+    svg.appendChild(ctitle);
+
+    const wrap = document.createElement("div");
+    wrap.className = "mindmap-wrap";
+    wrap.appendChild(svg);
+    canvas.innerHTML = "";
+    canvas.appendChild(wrap);
+  }
+
+  // ---------------------------------------------------------------------------
+  // TABLE / TIMELINE fallback views (bonus)
+  // ---------------------------------------------------------------------------
+  function renderTable() {
+    const rows = (state.nodes || []).map((n) => {
+      const cl = clusterById(n.cluster);
+      const color = cl ? (cl.color || "#647884") : "#647884";
+      const kind = (n.kind || "idea").toLowerCase();
+      return `<tr class="${isNew(n.id) ? "enter" : ""}">
+        <td><span class="kind k-${kind}">${esc(kind)}</span></td>
+        <td>${esc(n.text)}</td>
+        <td><span class="swatch" style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${color};margin-right:6px;"></span>${esc(cl ? cl.label : "—")}</td>
+      </tr>`;
+    }).join("");
+    canvas.innerHTML = `<table class="reframe-table">
+      <thead><tr><th>Kind</th><th>Idea</th><th>Cluster</th></tr></thead>
+      <tbody>${rows}</tbody></table>`;
+  }
+
+  function renderTimeline() {
+    const ordered = [...(state.nodes || [])].sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    const items = ordered.map((n) => {
+      const cl = clusterById(n.cluster);
+      const color = cl ? (cl.color || "#647884") : "#647884";
+      const kind = (n.kind || "idea").toLowerCase();
+      return `<div class="tl-item ${isNew(n.id) ? "enter" : ""}">
+        <span class="kind k-${kind}">${esc(kind)}</span>
+        <div class="ctext" style="margin-top:6px;font-size:16px;">${esc(n.text)}</div>
+        <div style="color:${color};font-size:12px;margin-top:4px;">${esc(cl ? cl.label : "")}</div>
+      </div>`;
+    }).join("");
+    canvas.innerHTML = `<div class="timeline">${items}</div>`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // View switcher — optimistic local + POST command through the pipeline
+  // ---------------------------------------------------------------------------
+  el("switcher").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-view]");
+    if (!btn) return;
+    const view = btn.dataset.view;
+    manualView = view;                 // optimistic
+    render();
+    if (!MOCK) {
+      postCommand(`show as ${view}`);
+    } else {
+      // in mock mode also update synthetic state so it "flows" the same way
+      if (state) state.view = { type: view, spec: {} };
+    }
+  });
+
+  async function postCommand(text) {
+    try {
+      await fetch("/api/reframe/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+    } catch (err) {
+      console.warn("[Reframe] command POST failed:", err);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // SSE stream + auto-reconnect
+  // ---------------------------------------------------------------------------
+  function connect() {
+    setStatus("connecting", false);
+    try {
+      es = new EventSource("/api/reframe/stream");
+    } catch (err) {
+      scheduleReconnect();
+      return;
+    }
+
+    es.onopen = () => setStatus("connected", false);
+
+    es.onmessage = (ev) => {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch { return; }
+      handleEvent(msg);
+    };
+
+    es.onerror = () => {
+      setStatus("disconnected", false);
+      try { es.close(); } catch {}
+      scheduleReconnect();
+    };
+  }
+
+  function handleEvent(msg) {
+    if (!msg || !msg.type) return;
+    switch (msg.type) {
+      case "hello":
+      case "state":
+        if (msg.state) {
+          state = msg.state;
+          manualView = null;          // server state wins; clear local override
+          render();
+        }
+        break;
+      case "status":
+        setStatus(msg.bee || "connected", !!msg.thinking);
+        break;
+      default:
+        break;
+    }
+  }
+
+  function scheduleReconnect() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, 2000);
+  }
+
+  // re-render mindmap on resize (it depends on canvas size)
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    if (currentView() !== "mindmap") return;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render, 150);
+  });
+
+  // ---------------------------------------------------------------------------
+  // MOCK MODE — synthesize a realistic state, no server
+  // ---------------------------------------------------------------------------
+  function buildMockState() {
+    const now = Date.now();
+    const clusters = [
+      { id: "c1", label: "Product Vision", color: "#5A969E" },
+      { id: "c2", label: "Technical Risks", color: "#EF5D63" },
+      { id: "c3", label: "Go-To-Market", color: "#C77DFF" },
+    ];
+    const nodes = [
+      { id: "n1", text: "Live thinking canvas projected during meetings", kind: "idea", cluster: "c1", parent: null, sourceIds: ["s1"], ts: now },
+      { id: "n2", text: "Speech is distilled into nodes automatically", kind: "idea", cluster: "c1", parent: "n1", sourceIds: ["s2"], ts: now },
+      { id: "n3", text: "Decide on a radial mindmap as the hero view", kind: "decision", cluster: "c1", parent: null, sourceIds: ["s3"], ts: now },
+      { id: "n4", text: "What if the transcription drops words?", kind: "question", cluster: "c2", parent: null, sourceIds: ["s4"], ts: now },
+      { id: "n5", text: "Append-only ledger guarantees no idea is lost", kind: "idea", cluster: "c2", parent: "n4", sourceIds: ["s5"], ts: now },
+      { id: "n6", text: "Latency on re-clustering could break the live feel", kind: "risk", cluster: "c2", parent: null, sourceIds: ["s6"], ts: now },
+      { id: "n7", text: "Pitch it to the jury as a brainstorm co-pilot", kind: "action", cluster: "c3", parent: null, sourceIds: ["s7"], ts: now },
+      { id: "n8", text: "Export the board to markdown for follow-up", kind: "action", cluster: "c3", parent: null, sourceIds: ["s8"], ts: now },
+    ];
+    const sources = nodes.map((n, i) => ({
+      id: "s" + (i + 1),
+      speaker: ["Alex", "Sam", "Jordan"][i % 3],
+      text: n.text,
+      ts: now,
+      nodeIds: [n.id],
+    }));
+    return {
+      sessionId: "mock-session",
+      title: "Reframe Kickoff Brainstorm",
+      sources,
+      nodes,
+      clusters,
+      view: { type: "board", spec: {} },
+      coverage: { total: 8, covered: 8, lost: [] },
+    };
+  }
+
+  let mockCounter = 0;
+  const MOCK_IDEAS = [
+    { text: "Add a 'coverage drill-down' panel", kind: "idea", cluster: "c1" },
+    { text: "Should we support multiple languages live?", kind: "question", cluster: "c2" },
+    { text: "Rate-limit the brain to avoid API spikes", kind: "risk", cluster: "c2" },
+    { text: "Record a 60-second demo video", kind: "action", cluster: "c3" },
+    { text: "Make cluster colors configurable per session", kind: "idea", cluster: "c1" },
+  ];
+
+  function addMockIdea() {
+    if (!state) return;
+    const spec = MOCK_IDEAS[mockCounter % MOCK_IDEAS.length];
+    mockCounter++;
+    const id = "nm" + mockCounter;
+    const sid = "sm" + mockCounter;
+    const speaker = ["Alex", "Sam", "Jordan"][mockCounter % 3];
+    state.nodes.push({ id, text: spec.text, kind: spec.kind, cluster: spec.cluster, parent: null, sourceIds: [sid], ts: Date.now() });
+    state.sources.push({ id: sid, speaker, text: spec.text, ts: Date.now(), nodeIds: [id] });
+    state.coverage.total += 1;
+    state.coverage.covered += 1;
+    render();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Boot
+  // ---------------------------------------------------------------------------
+  function boot() {
+    if (MOCK) {
+      el("mockBadge").style.display = "";
+      const mb = el("mockAddBtn");
+      mb.style.display = "";
+      mb.addEventListener("click", addMockIdea);
+      el("exportBtn").addEventListener("click", (e) => {
+        // no server in mock mode
+        if (MOCK) { e.preventDefault(); alert("Export opens /api/reframe/export when served by reframe-server.js."); }
+      });
+      setStatus("connected", false);
+      state = buildMockState();
+      render();
+      // simulate a "thinking" blip to show the pulse works
+      setTimeout(() => setStatus("connected", true), 600);
+      setTimeout(() => setStatus("connected", false), 2200);
+      return;
+    }
+    connect();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

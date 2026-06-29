@@ -26,6 +26,10 @@ dist-ssr
 # Workshop temp files
 .tmp/*
 !.tmp/.gitkeep
+**/.tmp/
+
+# Local MCP config (contains the Nova Act API key — do not commit)
+.mcp.json
 .ui-verification/reports/*
 !.ui-verification/reports/.gitkeep
 
