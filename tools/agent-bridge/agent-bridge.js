@@ -315,6 +315,31 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ─── /api/report/screenshots/<file> ── Serve a screenshot referenced by the report.
+  // report.md uses relative paths like "screenshots/full-page.png", which the browser
+  // resolves against /api/report/view → /api/report/screenshots/<file>.
+  const shotMatch = req.url.match(/^\/api\/report\/screenshots\/([A-Za-z0-9._-]+)$/);
+  if (shotMatch) {
+    const execCwd = appDir || process.cwd();
+    const reportsDir = path.join(execCwd, '.ui-verification', 'reports');
+    try {
+      const dirs = fs.readdirSync(reportsDir).filter(d => fs.statSync(path.join(reportsDir, d)).isDirectory()).sort().reverse();
+      for (const dir of dirs) {
+        const imgPath = path.join(reportsDir, dir, 'screenshots', shotMatch[1]);
+        if (fs.existsSync(imgPath)) {
+          const ext = path.extname(imgPath).toLowerCase();
+          const type = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
+          res.writeHead(200, { 'Content-Type': type, 'Access-Control-Allow-Origin': '*' });
+          res.end(fs.readFileSync(imgPath));
+          return;
+        }
+      }
+    } catch (_) {}
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Screenshot not found');
+    return;
+  }
+
   // ─── /api/report/view ── Serve the report as rendered HTML (simple markdown→HTML)
   if (req.url === '/api/report/view') {
     log('report', 'Serving report HTML view');

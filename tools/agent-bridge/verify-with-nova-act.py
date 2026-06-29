@@ -292,7 +292,7 @@ def write_report(app_dir, app_url, rules, visual_results, flow_results):
 
 ## Screenshot
 
-![Overview](screenshots/overview.png)
+![Overview](screenshots/full-page.png)
 
 """
 
