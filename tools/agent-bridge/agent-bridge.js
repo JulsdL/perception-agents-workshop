@@ -29,6 +29,19 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+let marked;
+try {
+  ({ marked } = require('marked'));
+  // Render Markdown reports as HTML via `marked` (GFM: tables, lists, etc.).
+  // gfm + breaks match how the verification report.md is authored.
+  marked.setOptions({ gfm: true, breaks: true });
+} catch (e) {
+  process.stderr.write(
+    "[agent-bridge] Missing dependency 'marked'. Install the agent-bridge deps first:\n" +
+    "  npm install --prefix tools/agent-bridge\n"
+  );
+  process.exit(1);
+}
 
 // Parse command-line arguments for server configuration
 const args = process.argv.slice(2);
@@ -129,6 +142,13 @@ process.stderr.write(`[agent-bridge] Using CLI: ${CLI}\n`);
 function log(tag, msg) {
   const ts = new Date().toISOString().replace('T', ' ').slice(0, 19);
   process.stderr.write(`[${ts}] [${tag}] ${msg}\n`);
+}
+
+// Convert a Markdown verification report to HTML via the `marked` library.
+// Replaces the previous hand-rolled regex converter, which did not handle
+// tables and leaked raw "|---|" rows into the rendered report.
+function renderMarkdown(md) {
+  return marked.parse(md);
 }
 
 // ─── HTTP Server ───────────────────────────────────────────────────────────────
@@ -295,6 +315,31 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ─── /api/report/screenshots/<file> ── Serve a screenshot referenced by the report.
+  // report.md uses relative paths like "screenshots/full-page.png", which the browser
+  // resolves against /api/report/view → /api/report/screenshots/<file>.
+  const shotMatch = req.url.match(/^\/api\/report\/screenshots\/([A-Za-z0-9._-]+)$/);
+  if (shotMatch) {
+    const execCwd = appDir || process.cwd();
+    const reportsDir = path.join(execCwd, '.ui-verification', 'reports');
+    try {
+      const dirs = fs.readdirSync(reportsDir).filter(d => fs.statSync(path.join(reportsDir, d)).isDirectory()).sort().reverse();
+      for (const dir of dirs) {
+        const imgPath = path.join(reportsDir, dir, 'screenshots', shotMatch[1]);
+        if (fs.existsSync(imgPath)) {
+          const ext = path.extname(imgPath).toLowerCase();
+          const type = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
+          res.writeHead(200, { 'Content-Type': type, 'Access-Control-Allow-Origin': '*' });
+          res.end(fs.readFileSync(imgPath));
+          return;
+        }
+      }
+    } catch (_) {}
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Screenshot not found');
+    return;
+  }
+
   // ─── /api/report/view ── Serve the report as rendered HTML (simple markdown→HTML)
   if (req.url === '/api/report/view') {
     log('report', 'Serving report HTML view');
@@ -308,24 +353,14 @@ const server = http.createServer((req, res) => {
           const content = fs.readFileSync(rp, 'utf-8');
           const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>UI Verification Report</title>' +
             '<style>body{font-family:-apple-system,sans-serif;max-width:900px;margin:40px auto;padding:0 20px;color:#1a1a2e;line-height:1.6}' +
-            'table{border-collapse:collapse;width:100%}th,td{border:1px solid #e9ecef;padding:8px 12px;text-align:left}' +
+            'table{border-collapse:collapse;width:100%;margin:1em 0}th,td{border:1px solid #e9ecef;padding:8px 12px;text-align:left}' +
             'th{background:#f8f9fa}code{background:#f0f0f0;padding:2px 5px;border-radius:3px;font-size:0.9em}' +
             'h1{border-bottom:2px solid #6c63ff;padding-bottom:8px}h2{margin-top:2em}details{margin:1em 0}' +
+            'hr{border:0;border-top:1px solid #e9ecef;margin:2em 0}ul{margin:1em 0;padding-left:1.5em}' +
+            'img{max-width:100%;height:auto;border:1px solid #e9ecef;border-radius:4px}' +
             'summary{cursor:pointer;font-weight:600}</style></head><body>' +
-            content.replace(/^# (.+)$/gm, '<h1>$1</h1>')
-              .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-              .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-              .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-              .replace(/`([^`]+)`/g, '<code>$1</code>')
-              .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-              .replace(/<details>/g, '<details>').replace(/<\/details>/g, '</details>')
-              .replace(/<summary>(.+?)<\/summary>/g, '<summary>$1</summary>')
-              .replace(/^(?!<[h123dsa])(.*$)/gm, function (line) {
-                if (line.startsWith('|')) return line;
-                if (line.trim() === '') return '<br>';
-                return '<p>' + line + '</p>';
-              })
-            + '</body></html>';
+            renderMarkdown(content) +
+            '</body></html>';
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
           res.end(html);
           return;
