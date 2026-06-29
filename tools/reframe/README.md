@@ -34,10 +34,14 @@ node tools/reframe/reframe-server.js --port 9998 --state tools/reframe/.tmp/boar
 # 2. Open the canvas
 open http://localhost:9998          # projector-friendly dark UI
 
-# 3a. LIVE input — just talk near your Bee (see "Bee setup" below), or
+# 3a. LIVE voice — click "🎙 Listen" in the canvas and just talk (Chrome; no Bee needed), or
 # 3b. REHEARSAL — replay a canned session through the real AI brain:
 node tools/reframe/replay.js --port 9998 --delay 2500
 ```
+
+Three ways to feed the canvas, all through the same pipeline:
+**browser voice** (the 🎙 Listen button — Chrome's Web Speech API, no account/hardware),
+a **Bee wearable** (optional, see below), or **replay** for a scripted rehearsal.
 
 The AI "brain" shells out to the `claude` CLI (auto-detected; falls back to `kiro-cli`).
 No Python and no extra dependencies — the server uses only Node.js built-ins.
@@ -52,19 +56,26 @@ REFRAME_FAKE_BRAIN=1 node tools/reframe/reframe-server.js --port 9998 --state to
 tests and offline UI work. The UI also has a no-server mock mode: open
 `board.html?mock=1` directly in a browser.
 
-## Bee setup (live voice input)
+## Voice input
+
+**Browser (recommended — no account, no hardware):** open the canvas in Chrome, click
+**🎙 Listen**, allow the microphone, and talk. Recognized speech POSTs to `/api/reframe/inject`,
+so the canvas builds itself live. Spoken view commands ("show this as a mindmap") work too, since
+the brain reads intent from the same path. Uses the Web Speech API (Chrome; needs internet).
+
+**Bee wearable (optional, hands-free):**
 
 ```bash
 npm install -g @beeai/cli
-bee login                 # use YOUR Bee account so your device's conversations stream in
+bee login                 # your Bee account
 bee status                # confirm connected
 ```
 
-The server spawns `bee stream --types update-conversation --json`; when a conversation is
-processed it fetches the transcript (`bee conversations transcript <id> --json`) and feeds
-each new utterance through the same pipeline as `/api/reframe/inject`. If `bee` is not installed
-the server still runs (Bee status `disconnected`) and replay / manual input still work.
-Override the binary location with `BEE_CLI_PATH`.
+The server spawns `bee stream --types new-utterance,update-conversation --json`; `new-utterance`
+streams each spoken phrase in real time (debounced into one node), and `update-conversation`
+reconciles the full transcript as a fallback — both feed the same `/api/reframe/inject` pipeline.
+If `bee` is not installed the server still runs (Bee status `disconnected`); browser voice and
+replay still work. Override the binary location with `BEE_CLI_PATH`.
 
 ## Suggested live demo flow (90 seconds)
 

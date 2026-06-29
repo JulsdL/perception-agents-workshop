@@ -105,9 +105,12 @@ Smooth enter animations for new cards (projector "wow"). Big, high-contrast, dar
 **coverage badge** ("N/N ideas captured · 0 lost"), a view switcher, an **Export** button
 (links `GET /api/reframe/export`). Frontend supports `?mock=1` to render synthetic state with no server.
 
-## 6. Inputs / Bee integration
+## 6. Inputs
 
-- `bee stream --types new-utterance,update-conversation --json` subprocess. `new-utterance` is the
+- **Browser voice (primary demo path):** the canvas `🎙 Listen` button uses the Web Speech API
+  (Chrome) to transcribe speech and POST each final phrase to `/api/reframe/inject`. No account or
+  hardware required.
+- **Bee wearable (optional):** `bee stream --types new-utterance,update-conversation --json` subprocess. `new-utterance` is the
   real-time path (each spoken phrase, debounced ~1.5s into one grouped node so the canvas builds
   while you talk); `update-conversation` is the reconciliation fallback (on `state==processed`, fetch
   `bee conversations transcript <id> --json` and inject anything the live path missed). Both feed the

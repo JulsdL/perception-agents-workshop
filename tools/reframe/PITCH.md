@@ -36,7 +36,7 @@ The same philosophy — a shared perceptual surface plus deterministic verificat
 ## How it works (90-second architecture)
 
 ```
-Bee voice ──▶ transcript ──▶ Reframe server ──▶ AI brain (Claude) ──▶ JSON patch
+Voice (browser mic / Bee) ──▶ Reframe server ──▶ AI brain (Claude) ──▶ JSON patch
                                   │  append-only state (nodes · clusters · view · coverage)
                                   ▼  live SSE
                           Canvas: board · list · mindmap  +  coverage badge  +  one-click export
@@ -53,6 +53,9 @@ Bee voice ──▶ transcript ──▶ Reframe server ──▶ AI brain (Clau
   can't fail on stage.
 
 ## Live demo flow
+
+> Runs on a laptop with **browser voice** (click 🎙 Listen and talk — no Bee account or hardware
+> needed); a Bee wearable is supported for true hands-free capture.
 
 1. Empty canvas on the projector. The team starts brainstorming out loud.
 2. Sticky notes appear and **auto-cluster** into themes as people speak.

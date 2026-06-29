@@ -83,24 +83,24 @@ The model is **append-only**, so a coverage badge can prove **"N/N ideas capture
 **Run it:**
 ```bash
 node tools/reframe/reframe-server.js --port 9998 --state tools/reframe/.tmp/board.json   # serves UI + SSE
-node tools/reframe/replay.js --port 9998                                          # rehearse a session
-# open http://localhost:9998  — or talk near your Bee for live input
+# open http://localhost:9998 in Chrome → click "🎙 Listen" and talk (no Bee needed)
+node tools/reframe/replay.js --port 9998                                          # or rehearse a scripted session
 ```
+
+### Voice input — no Bee account required
+The demo runs on **browser voice**: click **🎙 Listen** in the canvas and talk (Chrome Web Speech
+API → `/api/reframe/inject`). No Bee account or hardware, no WSL keyring issues. A **Bee wearable**
+is supported too (`new-utterance` real-time stream) but optional; `replay.js` gives a scripted
+fallback.
 
 ### What was verified
 - Full pipeline through the real `claude` brain: utterances → distilled nodes → multi-theme
   clusters; view commands ("show as mindmap") morph the view.
 - Live frontend↔backend over SSE (board renders 12 nodes, coverage **12/12 · 0 lost**, markdown
   export) — see [`tools/reframe/screenshots/`](tools/reframe/screenshots/).
+- Real-time Bee `new-utterance` path verified end-to-end (4 spoken fragments → 2 grouped nodes).
 - All three views render with **0 console errors**; never-lose fallback keeps an idea even if the
   model fails.
-
-### Still to do for a live Bee demo
-```bash
-npm install -g @beeai/cli
-bee login        # YOUR Bee account (so your device's conversations stream in)
-bee status
-```
 
 ---
 
