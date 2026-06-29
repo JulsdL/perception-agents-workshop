@@ -107,9 +107,12 @@ Smooth enter animations for new cards (projector "wow"). Big, high-contrast, dar
 
 ## 6. Inputs / Bee integration
 
-- Primary: `bee stream --types update-conversation --json` subprocess; on `state==processed`,
-  fetch `bee conversations transcript <id> --json`, feed each new utterance to the brain via the
-  same path as `/api/reframe/inject`. (Reuse the streaming code from `tools/bee-annotator-solution/proxy-worker.js`.)
+- `bee stream --types new-utterance,update-conversation --json` subprocess. `new-utterance` is the
+  real-time path (each spoken phrase, debounced ~1.5s into one grouped node so the canvas builds
+  while you talk); `update-conversation` is the reconciliation fallback (on `state==processed`, fetch
+  `bee conversations transcript <id> --json` and inject anything the live path missed). Both feed the
+  brain via the same path as `/api/reframe/inject`, deduped by `speaker|text`. (Reuse the streaming
+  code from `tools/bee-annotator-solution/proxy-worker.js`.)
 - `bee` binary path overridable via `BEE_CLI_PATH`. If `bee` is missing, the server still runs
   (Bee status = `disconnected`) and `/api/reframe/inject` + `/api/reframe/command` + replay still work.
 - A canned replay transcript (`tools/reframe/sample-session.json`, an array of `{speaker,text}`) and a

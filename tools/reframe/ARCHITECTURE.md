@@ -102,12 +102,22 @@ eliminates an entire class of diff-sync bugs. The client auto-reconnects with ba
 
 ## 5. Bee integration
 
-Reuses the streaming pattern from `tools/bee-annotator-solution/proxy-worker.js`:
-spawn `bee stream --types update-conversation --json`; on a conversation reaching `processed`,
-fetch `bee conversations transcript <id> --json` and feed each **new** utterance (deduped) into
-the same queue as `/api/reframe/inject`. Bee is optional and isolated: if the binary is missing or
-the stream drops, the server logs it, keeps Bee status `disconnected`, retries on a timer, and
-everything else keeps working.
+Reuses the streaming pattern from `tools/bee-annotator-solution/proxy-worker.js`, with two
+event types so the canvas builds **while you speak**:
+
+- **`new-utterance` (real-time, primary):** each spoken phrase arrives as a fragment. Fragments
+  are buffered and flushed as one grouped thought after a short pause (`UTTER_DEBOUNCE_MS`, 1.5s)
+  or when the speaker changes — so a sentence becomes one node, not a dozen. This is what makes
+  post-its appear live during the conversation. Each fragment's key is marked seen on arrival.
+- **`update-conversation` (reconciliation, fallback):** when Bee finishes processing a
+  conversation, the full transcript (`bee conversations transcript <id> --json`) is fetched and
+  any utterance not already seen is injected — a safety net that catches anything the live stream
+  missed, without duplicating what the live path already created.
+
+Both feed the same queue as `/api/reframe/inject`. Bee is optional and isolated: if the binary is
+missing or the stream drops, the server logs it, keeps Bee status `disconnected`, retries on a
+timer, and everything else keeps working. (The first utterance event's raw shape is logged once to
+stderr to make field-mapping verifiable against a live device.)
 
 ## 6. Views (`board.html`)
 

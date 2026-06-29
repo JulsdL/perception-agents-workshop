@@ -280,13 +280,62 @@ async function handleInput(input) {
 // ─── Bee integration (CONTRACT §6, adapted from proxy-worker.js) ──────────────
 const seenUtterances = new Set();
 
+// Real-time utterance debounce: spoken phrases arrive as small fragments via the
+// `new-utterance` stream event. We buffer them and flush a grouped thought after a
+// short pause (or when the speaker changes), so one spoken sentence becomes one node
+// instead of a dozen fragments. Each fragment's key is marked "seen" immediately, so
+// the later `update-conversation` transcript reconciliation never re-creates it.
+const UTTER_DEBOUNCE_MS = 1500;
+let uttBuffer = [];
+let uttSpeaker = null;
+let uttTimer = null;
+let loggedSampleUtterance = false;
+
+function flushUtterances() {
+  if (uttTimer) { clearTimeout(uttTimer); uttTimer = null; }
+  if (uttBuffer.length === 0) return;
+  const text = uttBuffer.join(' ').replace(/\s+/g, ' ').trim();
+  const speaker = uttSpeaker;
+  uttBuffer = [];
+  uttSpeaker = null;
+  if (text) enqueueInput({ speaker: speaker || null, text, isCommand: false });
+}
+
+// Pull a {speaker, text} out of a `new-utterance` event across the shapes Bee might use.
+function extractUtterance(event) {
+  const u = (event && (event.utterance || event.data)) || event;
+  if (!u) return null;
+  let text = (typeof u === 'string') ? u : (u.text || u.transcript || u.content || u.body);
+  if (!text) return null;
+  const speaker = (typeof u === 'object' && (u.speaker || u.speaker_name || u.user || u.user_name)) || null;
+  return { speaker: speaker || null, text: String(text).trim() };
+}
+
+function ingestLiveUtterance(event) {
+  if (!loggedSampleUtterance) {
+    loggedSampleUtterance = true;
+    process.stderr.write('[reframe][bee] sample utterance event: ' + JSON.stringify(event).slice(0, 400) + '\n');
+  }
+  const u = extractUtterance(event);
+  if (!u || !u.text) return;
+  const key = (u.speaker || '') + '|' + u.text;
+  if (seenUtterances.has(key)) return;     // already ingested (live or via transcript)
+  seenUtterances.add(key);
+  // Speaker change → flush the in-progress thought first.
+  if (uttBuffer.length && u.speaker && uttSpeaker && u.speaker !== uttSpeaker) flushUtterances();
+  uttBuffer.push(u.text);
+  uttSpeaker = u.speaker || uttSpeaker;
+  if (uttTimer) clearTimeout(uttTimer);
+  uttTimer = setTimeout(flushUtterances, UTTER_DEBOUNCE_MS);
+}
+
 function startBeeStream() {
   if (beeStreamProcess) {
     try { beeStreamProcess.kill(); } catch (_) {}
   }
   let child;
   try {
-    child = spawn(BEE_CLI, ['stream', '--types', 'update-conversation', '--json'], {
+    child = spawn(BEE_CLI, ['stream', '--types', 'new-utterance,update-conversation', '--json'], {
       env: EXEC_ENV,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -338,6 +387,16 @@ function startBeeStream() {
 
 function handleBeeEvent(event) {
   setBeeStatus('connected');
+
+  // Real-time path: a single spoken phrase. Inject it live (debounced) for the
+  // "post-its appear while you talk" effect.
+  const type = (event && (event.type || event.event || event.kind) || '').toString().toLowerCase();
+  const looksLikeUtterance = type.indexOf('utterance') !== -1 ||
+    (event && (event.utterance || (event.text && !event.conversation)));
+  if (looksLikeUtterance) { ingestLiveUtterance(event); return; }
+
+  // Fallback / reconciliation path: a completed conversation. Its per-utterance
+  // texts were already marked "seen" by the live path, so this only fills gaps.
   const conv = event && event.conversation;
   if (!conv) return;
   const convState = (conv.state || '').toLowerCase();
